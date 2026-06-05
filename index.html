@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOC Shift Handover</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #ffffff; --bg-secondary: #f7f7f6; --bg-tertiary: #f0efec;
+      --bg-info: #e6f1fb; --text-primary: #1a1a18; --text-secondary: #6b6b68;
+      --text-info: #185fa5; --border-tertiary: rgba(0,0,0,0.12);
+      --border-secondary: rgba(0,0,0,0.22); --border-primary: rgba(0,0,0,0.32);
+      --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary:#1e1e1c; --bg-secondary:#272724; --bg-tertiary:#111110;
+        --bg-info:#0c2a47; --text-primary:#e8e8e4; --text-secondary:#8a8a86;
+        --text-info:#85b7eb; --border-tertiary:rgba(255,255,255,0.10);
+        --border-secondary:rgba(255,255,255,0.18); --border-primary:rgba(255,255,255,0.28);
+      }
+    }
+    body { font-family:var(--font); font-size:14px; color:var(--text-primary); background:var(--bg-tertiary); min-height:100vh; }
+
+    /* ── SETUP SCREEN ── */
+    #setup-screen { display:none; align-items:center; justify-content:center; min-height:100vh; padding:2rem 1rem; }
+    /* ── LOGIN SCREEN ── */
+    #login-screen { display:none; align-items:center; justify-content:center; min-height:100vh; padding:2rem 1rem; }
+    .login-card {
+      background:var(--bg-primary); border:0.5px solid var(--border-tertiary);
+      border-radius:var(--radius-xl); padding:2rem; width:100%; max-width:380px;
+      box-shadow:0 4px 24px rgba(0,0,0,0.07);
+    }
+    .login-logo { width:40px; height:40px; background:var(--text-primary); border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:1.25rem; }
+    .login-logo i { color:var(--bg-primary); font-size:20px; }
+    .login-card h2 { font-size:18px; font-weight:600; margin-bottom:4px; }
+    .login-card > p { font-size:13px; color:var(--text-secondary); margin-bottom:1.5rem; }
+    .login-field { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
+    .login-field label { font-size:12px; color:var(--text-secondary); }
+    .login-field input {
+      border:0.5px solid var(--border-secondary); border-radius:var(--radius-md);
+      padding:9px 12px; font-size:13px; font-family:var(--font);
+      background:var(--bg-primary); color:var(--text-primary); outline:none;
+      transition:border-color 0.15s; width:100%;
+    }
+    .login-field input:focus { border-color:var(--border-primary); }
+    .login-btn {
+      width:100%; padding:10px; background:var(--text-primary); color:var(--bg-primary);
+      border:none; border-radius:var(--radius-md); font-size:13px; font-weight:500;
+      font-family:var(--font); cursor:pointer; margin-top:4px; transition:opacity 0.15s;
+    }
+    .login-btn:hover { opacity:0.82; }
+    .login-error {
+      font-size:12px; color:#A32D2D; background:#FCEBEB;
+      border:0.5px solid #F09595; border-radius:var(--radius-md);
+      padding:8px 12px; margin-bottom:12px; display:none;
+    }
+    .login-error.show { display:block; }
+    .login-divider { border:none; border-top:0.5px solid var(--border-tertiary); margin:1.25rem 0 1rem; }
+    .login-hint { font-size:12px; color:var(--text-secondary); text-align:center; line-height:1.7; }
+    .login-hint strong { color:var(--text-primary); }
+
+    /* Setup card */
+    .setup-card {
+      background:var(--bg-primary); border:0.5px solid var(--border-tertiary);
+      border-radius:var(--radius-xl); padding:2rem; width:100%; max-width:520px;
+      box-shadow:0 4px 24px rgba(0,0,0,0.07);
+    }
+    .setup-card h2 { font-size:18px; font-weight:600; margin-bottom:6px; }
+    .setup-card > p { font-size:13px; color:var(--text-secondary); margin-bottom:1.5rem; line-height:1.6; }
+    .setup-steps { counter-reset:step; margin-bottom:1.5rem; }
+    .setup-step { display:flex; gap:12px; margin-bottom:1rem; font-size:13px; line-height:1.6; }
+    .step-num {
+      width:22px; height:22px; min-width:22px; background:var(--text-primary); color:var(--bg-primary);
+      border-radius:50%; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center;
+    }
+    .setup-step a { color:var(--text-info); }
+    .setup-field { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
+    .setup-field label { font-size:12px; color:var(--text-secondary); font-weight:500; }
+    .setup-field input {
+      border:0.5px solid var(--border-secondary); border-radius:var(--radius-md);
+      padding:9px 12px; font-size:13px; font-family:var(--font);
+      background:var(--bg-primary); color:var(--text-primary); outline:none; width:100%;
+    }
+    .setup-field input:focus { border-color:var(--border-primary); }
+    .setup-note { font-size:12px; color:var(--text-secondary); background:var(--bg-info); border-radius:var(--radius-md); padding:10px 12px; margin-bottom:1rem; line-height:1.6; }
+    .setup-error { font-size:12px; color:#A32D2D; background:#FCEBEB; border:0.5px solid #F09595; border-radius:var(--radius-md); padding:8px 12px; margin-bottom:12px; display:none; }
+    .setup-error.show { display:block; }
+
+    /* App */
+    #app-screen { display:none; padding:2rem 1rem; }
+    .container { max-width:780px; margin:0 auto; }
+    .app-header { margin-bottom:1.75rem; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .app-header h1 { font-size:20px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+    .app-header p { font-size:13px; color:var(--text-secondary); }
+    .user-badge {
+      display:flex; align-items:center; gap:8px;
+      background:var(--bg-primary); border:0.5px solid var(--border-tertiary);
+      border-radius:20px; padding:5px 12px 5px 8px; font-size:12px; flex-shrink:0;
+    }
+    .user-avatar { width:22px; height:22px; background:var(--text-primary); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--bg-primary); font-size:10px; font-weight:600; }
+    .user-name { color:var(--text-primary); font-weight:500; }
+    .user-role { font-size:10px; padding:1px 7px; border-radius:20px; font-weight:500; }
+    .role-admin { background:#FAEEDA; color:#854F0B; }
+    .role-analyst { background:var(--bg-secondary); color:var(--text-secondary); }
+    .logout-btn { background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:14px; padding:2px; margin-left:2px; display:flex; align-items:center; }
+    .logout-btn:hover { color:var(--text-primary); }
+
+    /* Loading */
+    #loading-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:99999; align-items:center; justify-content:center; flex-direction:column; gap:12px; }
+    #loading-overlay.show { display:flex; }
+    .spinner { width:28px; height:28px; border:2px solid var(--border-tertiary); border-top-color:var(--text-primary); border-radius:50%; animation:spin 0.7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #loading-overlay p { font-size:13px; color:#fff; }
+
+    /* Tabs */
+    .tabs { display:flex; border-bottom:0.5px solid var(--border-tertiary); margin-bottom:1.5rem; }
+    .tab { padding:9px 20px; font-size:13px; font-family:var(--font); cursor:pointer; border:none; background:none; color:var(--text-secondary); border-bottom:2px solid transparent; margin-bottom:-0.5px; font-weight:400; transition:color 0.15s; }
+    .tab.active { color:var(--text-primary); border-bottom-color:var(--text-primary); font-weight:500; }
+    .tab:hover:not(.active) { color:var(--text-primary); }
+
+    /* Card */
+    .card { background:var(--bg-primary); border:0.5px solid var(--border-tertiary); border-radius:var(--radius-lg); padding:1.1rem 1.25rem; margin-bottom:1rem; }
+    .sec-title { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-secondary); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+
+    /* Fields */
+    .field-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; }
+    .field { display:flex; flex-direction:column; gap:5px; }
+    .field label { font-size:12px; color:var(--text-secondary); }
+    .field input, .field select, .field textarea {
+      border:0.5px solid var(--border-secondary); border-radius:var(--radius-md);
+      padding:7px 10px; font-size:13px; font-family:var(--font);
+      background:var(--bg-primary); color:var(--text-primary); outline:none; transition:border-color 0.15s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--border-primary); }
+    .field textarea { resize:vertical; min-height:80px; }
+
+    /* Severity */
+    .severity-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    .sev-card { border:0.5px solid; border-radius:var(--radius-md); padding:10px 8px; text-align:center; }
+    .sev-label { font-size:11px; font-weight:500; margin-bottom:6px; }
+    .sev-card input { border:0.5px solid; border-radius:6px; width:100%; padding:4px 6px; text-align:center; font-size:20px; font-weight:500; background:transparent; font-family:var(--font); outline:none; }
+    .sev-card.critical { background:#FCEBEB; border-color:#F09595; }
+    .sev-card.critical .sev-label { color:#A32D2D; }
+    .sev-card.critical input { border-color:#F09595; color:#A32D2D; }
+    .sev-card.major { background:#FAEEDA; border-color:#FAC775; }
+    .sev-card.major .sev-label { color:#854F0B; }
+    .sev-card.major input { border-color:#FAC775; color:#854F0B; }
+    .sev-card.minor { background:#E6F1FB; border-color:#85B7EB; }
+    .sev-card.minor .sev-label { color:#185FA5; }
+    .sev-card.minor input { border-color:#85B7EB; color:#185FA5; }
+    .sev-card.system { background:#EAF3DE; border-color:#97C459; }
+    .sev-card.system .sev-label { color:#3B6D11; }
+    .sev-card.system input { border-color:#97C459; color:#3B6D11; }
+
+    /* Alert table */
+    .atbl { width:100%; border-collapse:collapse; font-size:12px; }
+    .atbl th { text-align:left; padding:6px; font-weight:500; color:var(--text-secondary); border-bottom:0.5px solid var(--border-tertiary); white-space:nowrap; }
+    .atbl td { padding:4px; border-bottom:0.5px solid var(--border-tertiary); }
+    .atbl td input, .atbl td select { border:0.5px solid var(--border-secondary); border-radius:4px; padding:4px 6px; width:100%; font-size:12px; font-family:var(--font); background:var(--bg-primary); color:var(--text-primary); outline:none; }
+
+    /* Buttons */
+    .btn { padding:7px 14px; border-radius:var(--radius-md); border:0.5px solid var(--border-secondary); background:var(--bg-primary); color:var(--text-primary); cursor:pointer; font-size:13px; font-family:var(--font); display:inline-flex; align-items:center; gap:5px; transition:background 0.12s,opacity 0.12s; }
+    .btn:hover { background:var(--bg-secondary); }
+    .btn-primary { background:var(--text-primary); color:var(--bg-primary); border-color:var(--text-primary); }
+    .btn-primary:hover { opacity:0.82; background:var(--text-primary); }
+    .btn-sm { padding:4px 10px; font-size:12px; }
+    .btn-danger { color:#A32D2D; border-color:#F09595; background:transparent; }
+    .btn-danger:hover { background:#FCEBEB; }
+
+    /* Shift picker */
+    .shift-picker { display:flex; gap:8px; flex-wrap:wrap; }
+    .shift-btn { padding:7px 14px; border-radius:var(--radius-md); border:0.5px solid var(--border-secondary); background:var(--bg-primary); color:var(--text-secondary); cursor:pointer; font-size:12px; font-family:var(--font); transition:background 0.12s,color 0.12s; }
+    .shift-btn.active { background:var(--text-primary); color:var(--bg-primary); border-color:var(--text-primary); }
+
+    /* Roster */
+    .rtbl { width:100%; border-collapse:collapse; font-size:13px; }
+    .rtbl th { text-align:left; padding:6px 8px; font-weight:500; color:var(--text-secondary); border-bottom:0.5px solid var(--border-tertiary); }
+    .rtbl td { padding:6px 8px; border-bottom:0.5px solid var(--border-tertiary); }
+    .rtbl select { border:0.5px solid var(--border-secondary); border-radius:4px; padding:4px 6px; font-size:12px; font-family:var(--font); background:var(--bg-primary); color:var(--text-primary); outline:none; }
+
+    .submit-row { display:flex; gap:8px; justify-content:flex-end; margin-top:1rem; }
+
+    /* History */
+    .tenant-group { border:0.5px solid var(--border-tertiary); border-radius:var(--radius-lg); margin-bottom:12px; overflow:hidden; }
+    .tenant-group-header { display:flex; justify-content:space-between; align-items:center; padding:13px 1.25rem; cursor:pointer; background:var(--bg-secondary); user-select:none; transition:background 0.12s; }
+    .tenant-group-header:hover { background:var(--bg-tertiary); }
+    .tenant-group-title { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .tenant-name { font-size:14px; font-weight:500; }
+    .tenant-count { font-size:12px; color:var(--text-secondary); background:var(--bg-primary); border:0.5px solid var(--border-tertiary); border-radius:20px; padding:2px 9px; }
+    .tenant-chevron { font-size:18px; color:var(--text-secondary); transition:transform 0.2s; }
+    .tenant-chevron.open { transform:rotate(180deg); }
+    .tenant-records { display:none; }
+    .tenant-records.open { display:block; }
+    .hist-item { border-bottom:0.5px solid var(--border-tertiary); padding:11px 1.25rem; cursor:pointer; transition:background 0.12s; }
+    .hist-item:last-child { border-bottom:none; }
+    .hist-item:hover { background:var(--bg-secondary); }
+    .hist-header { display:flex; justify-content:space-between; align-items:flex-start; }
+    .hist-meta { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:7px; }
+    .badge { font-size:11px; padding:2px 9px; border-radius:20px; font-weight:500; }
+    .b-crit { background:#FCEBEB; color:#A32D2D; }
+    .b-major { background:#FAEEDA; color:#854F0B; }
+    .hist-detail { display:none; padding:12px 0 4px 0; border-top:0.5px solid var(--border-tertiary); margin-top:10px; }
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+    .di { font-size:12px; }
+    .di span { color:var(--text-secondary); display:block; margin-bottom:2px; }
+    .sev-mini { border-radius:var(--radius-md); padding:8px; text-align:center; border:0.5px solid; }
+    .sev-mini-label { font-size:11px; font-weight:500; margin-bottom:4px; }
+    .sev-mini-val { font-size:18px; font-weight:500; }
+
+    /* Filter */
+    .filter-row { display:flex; gap:8px; margin-bottom:1rem; flex-wrap:wrap; align-items:center; }
+    .filter-row select, .filter-row input[type="date"] { border:0.5px solid var(--border-secondary); border-radius:var(--radius-md); padding:7px 10px; font-size:13px; font-family:var(--font); background:var(--bg-primary); color:var(--text-primary); outline:none; }
+    .search-box { border:0.5px solid var(--border-secondary); border-radius:var(--radius-md); padding:7px 10px; font-size:13px; font-family:var(--font); background:var(--bg-primary); color:var(--text-primary); outline:none; flex:1; min-width:160px; }
+
+    /* Settings */
+    .analyst-tag { display:inline-flex; align-items:center; gap:6px; font-size:12px; background:var(--bg-secondary); border:0.5px solid var(--border-tertiary); border-radius:20px; padding:3px 10px; margin:3px; }
+    .analyst-tag button { border:none; background:none; cursor:pointer; color:var(--text-secondary); font-size:15px; padding:0; line-height:1; }
+    .analyst-tag button:hover { color:#A32D2D; }
+    .tenant-tag { display:inline-flex; align-items:center; gap:6px; font-size:12px; background:#E6F1FB; border:0.5px solid #85B7EB; border-radius:20px; padding:3px 10px; margin:3px; color:#185FA5; }
+    .tenant-tag button { border:none; background:none; cursor:pointer; color:#185FA5; font-size:15px; padding:0; line-height:1; }
+    .tenant-tag button:hover { color:#A32D2D; }
+    .setting-input { border:0.5px solid var(--border-secondary); border-radius:var(--radius-md); padding:7px 10px; font-size:13px; font-family:var(--font); background:var(--bg-primary); color:var(--text-primary); outline:none; flex:1; }
+    .danger-title { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.07em; color:#A32D2D; margin-bottom:12px; }
+    .duty-pill { font-size:12px; background:var(--bg-info); color:var(--text-info); padding:2px 10px; border-radius:20px; }
+    .empty { text-align:center; padding:3rem 1rem; color:var(--text-secondary); font-size:13px; }
+    .empty i { font-size:32px; display:block; margin-bottom:10px; }
+
+    /* Toast */
+    .toast { position:fixed; bottom:24px; right:24px; background:var(--text-primary); color:var(--bg-primary); padding:10px 18px; border-radius:var(--radius-md); font-size:13px; font-family:var(--font); opacity:0; pointer-events:none; transition:opacity 0.25s; z-index:9999; }
+    .toast.show { opacity:1; }
+
+    /* Modal */
+    .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9998; align-items:center; justify-content:center; }
+    .modal-bg.open { display:flex; }
+    .modal { background:var(--bg-primary); border:0.5px solid var(--border-tertiary); border-radius:var(--radius-lg); padding:1.5rem; width:360px; max-width:95vw; box-shadow:0 8px 32px rgba(0,0,0,0.12); }
+    .modal h3 { font-size:15px; font-weight:500; margin-bottom:1rem; }
+    .modal-field { display:flex; flex-direction:column; gap:5px; margin-bottom:10px; }
+    .modal-field label { font-size:12px; color:var(--text-secondary); }
+    .modal-field input { border:0.5px solid var(--border-secondary); border-radius:var(--radius-md); padding:7px 10px; font-size:13px; font-family:var(--font); background:var(--bg-primary); color:var(--text-primary); outline:none; width:100%; }
+    .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:1.25rem; }
+    .admin-only { display:none; }
+    .change-pw-form { display:flex; flex-direction:column; gap:10px; }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--border-secondary); border-radius:3px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ LOADING ═══ -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p id="loading-msg">Loading…</p>
+</div>
+
+<!-- ═══ SETUP SCREEN ═══ -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <div class="login-logo" style="background:var(--text-primary)"><i class="ti ti-database" style="color:var(--bg-primary);font-size:20px"></i></div>
+    <h2>Connect to shared database</h2>
+    <p>This app stores data on <strong>JSONBin.io</strong> (free) so your whole team shares the same history. Every team member just needs the same API key — the database is found automatically.</p>
+    <div class="setup-steps">
+      <div class="setup-step"><div class="step-num">1</div><div>Go to <a href="https://jsonbin.io" target="_blank">jsonbin.io</a> and create a free account (or ask your admin for the team API key).</div></div>
+      <div class="setup-step"><div class="step-num">2</div><div>Click <strong>API Keys</strong> in the left sidebar and copy your <strong>Master Key</strong> (starts with <code>$2b$…</code>).</div></div>
+      <div class="setup-step"><div class="step-num">3</div><div>Paste the key below and click <strong>Connect</strong>. If a shared database already exists it connects automatically — otherwise it creates one.</div></div>
+    </div>
+    <div class="setup-note">💡 <strong>This is a one-time step per device/browser.</strong> Your admin gives you the API key once (share it via WhatsApp or Signal, never email). Paste it here and click Connect — the app remembers it so you <strong>won't be asked again</strong> on this device. You will still need to log in with your username &amp; password each session (or after clicking Sign out).</div>
+    <div class="setup-field">
+      <label>JSONBin Master Key</label>
+      <input type="password" id="setup-apikey" placeholder="$2b$10$...">
+    </div>
+    <div class="setup-error" id="setup-error">Could not connect. Check your API key and try again.</div>
+    <button class="login-btn" onclick="doSetup()"><i class="ti ti-plug-connected" style="margin-right:6px"></i>Connect</button>
+  </div>
+</div>
+
+<!-- ═══ LOGIN SCREEN ═══ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo"><i class="ti ti-shield-lock"></i></div>
+    <h2>SOC Shift Handover</h2>
+    <p>Sign in to access the handover system.</p>
+    <div class="login-error" id="login-error">Incorrect username or password.</div>
+    <div class="login-field"><label>Username</label><input type="text" id="login-user" placeholder="Enter your username" autocomplete="username"></div>
+    <div class="login-field"><label>Password</label><input type="password" id="login-pass" placeholder="Enter your password" autocomplete="current-password"></div>
+    <button class="login-btn" onclick="doLogin()">Sign in</button>
+    <hr class="login-divider">
+    <div class="login-hint"><strong>Admin:</strong> username <code>admin</code> · password <code>admin123</code><br>Change via Settings after first login.<br><br>Analysts: username = lowercase name (e.g. <code>alen</code>), password = same</div>
+  </div>
+</div>
+
+<!-- ═══ APP SCREEN ═══ -->
+<div id="app-screen">
+  <div class="container">
+    <div class="app-header">
+      <div>
+        <h1>SOC shift handover</h1>
+        <p>Submissions are shared with all team members in real time.</p>
+      </div>
+      <div class="user-badge">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <span class="user-name" id="user-display-name">—</span>
+        <span class="user-role" id="user-role-badge">analyst</span>
+        <button class="logout-btn" onclick="doLogout()" title="Sign out"><i class="ti ti-logout"></i></button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('form')">New handover</button>
+      <button class="tab" onclick="switchTab('history')">History (<span id="hist-count">0</span>)</button>
+      <button class="tab admin-only" id="settings-tab-btn" onclick="switchTab('settings')">Settings</button>
+    </div>
+
+    <!-- FORM TAB -->
+    <div id="tab-form">
+      <div class="card">
+        <div class="sec-title">Shift details</div>
+        <div class="field-row">
+          <div class="field"><label>Date</label><input type="date" id="f-date"></div>
+          <div class="field"><label>Tenant / client</label><select id="f-team"></select></div>
+        </div>
+        <div class="field"><label>Shift</label>
+          <div class="shift-picker">
+            <button class="shift-btn active" onclick="selShift(this,'Shift 1 — 7:00 AM–4:00 PM')">Shift 1 · 7 AM–4 PM</button>
+            <button class="shift-btn" onclick="selShift(this,'Shift 2 — 3:00 PM–12:00 AM')">Shift 2 · 3 PM–12 AM</button>
+            <button class="shift-btn" onclick="selShift(this,'Shift 3 — 11:00 PM–8:00 AM')">Shift 3 · 11 PM–8 AM</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-title">Alert overview</div>
+        <div class="severity-grid">
+          <div class="sev-card critical"><div class="sev-label">Critical</div><input type="number" id="s-critical" value="0" min="0"></div>
+          <div class="sev-card major"><div class="sev-label">Major</div><input type="number" id="s-major" value="0" min="0"></div>
+          <div class="sev-card minor"><div class="sev-label">Minor</div><input type="number" id="s-minor" value="0" min="0"></div>
+          <div class="sev-card system"><div class="sev-label">System</div><input type="number" id="s-system" value="0" min="0"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-title">System alerts <button class="btn btn-sm" onclick="addAlertRow()"><i class="ti ti-plus"></i> Add row</button></div>
+        <div style="overflow-x:auto">
+          <table class="atbl">
+            <thead><tr><th style="width:95px">Alert ID</th><th style="width:120px">Type</th><th style="width:115px">Entity / user</th><th style="width:115px">Status</th><th style="width:105px">Assignee</th><th>Comments</th><th style="width:32px"></th></tr></thead>
+            <tbody id="alert-rows"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-title">Key observations &amp; notes</div>
+        <div class="field"><textarea id="f-notes" placeholder="Enter key observations, ongoing incidents, or important context for the incoming shift..."></textarea></div>
+      </div>
+      <div class="card">
+        <div class="sec-title">On-duty analyst roster <button class="btn btn-sm" onclick="openAddAnalystModal()"><i class="ti ti-plus"></i> Add analyst</button></div>
+        <table class="rtbl">
+          <thead><tr><th>Analyst</th><th>Shift</th><th>On duty</th><th style="width:44px"></th></tr></thead>
+          <tbody id="roster-body"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="sec-title">Handover sign-off</div>
+        <div class="field-row">
+          <div class="field"><label>Outgoing analyst</label><input type="text" id="f-outgoing" placeholder="Name"></div>
+          <div class="field"><label>Incoming analyst</label><input type="text" id="f-incoming" placeholder="Name"></div>
+        </div>
+        <div class="field"><label>Handover time</label><input type="time" id="f-time" style="max-width:160px"></div>
+      </div>
+      <div class="submit-row">
+        <button class="btn" onclick="resetForm()"><i class="ti ti-refresh"></i> Reset</button>
+        <button class="btn btn-primary" onclick="submitHandover()"><i class="ti ti-device-floppy"></i> Save handover</button>
+      </div>
+    </div>
+
+    <!-- HISTORY TAB -->
+    <div id="tab-history" style="display:none">
+      <div class="filter-row">
+        <input class="search-box" type="text" id="fl-search" placeholder="Search analyst, alert ID, notes..." oninput="renderHistory()">
+        <select id="fl-shift" onchange="renderHistory()">
+          <option value="">All shifts</option>
+          <option>Shift 1 — 7:00 AM–4:00 PM</option>
+          <option>Shift 2 — 3:00 PM–12:00 AM</option>
+          <option>Shift 3 — 11:00 PM–8:00 AM</option>
+        </select>
+        <input type="date" id="fl-date" onchange="renderHistory()">
+        <button class="btn btn-sm" onclick="clearFilters()">Clear</button>
+        <div style="position:relative;display:inline-block" id="dl-menu-wrap">
+          <button class="btn btn-sm" onclick="toggleDlMenu()" title="Download history"><i class="ti ti-download"></i> Download <i class="ti ti-chevron-down" style="font-size:11px"></i></button>
+          <div id="dl-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg-primary);border:0.5px solid var(--border-secondary);border-radius:var(--radius-md);box-shadow:0 4px 16px rgba(0,0,0,0.10);z-index:200;min-width:160px;overflow:hidden">
+            <button onclick="downloadExcel()" style="display:flex;align-items:center;gap:8px;width:100%;padding:9px 14px;font-size:13px;font-family:var(--font);background:none;border:none;cursor:pointer;color:var(--text-primary);text-align:left" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='none'"><i class="ti ti-table"></i> Excel (.xlsx)</button>
+            <button onclick="downloadPDF()" style="display:flex;align-items:center;gap:8px;width:100%;padding:9px 14px;font-size:13px;font-family:var(--font);background:none;border:none;cursor:pointer;color:var(--text-primary);text-align:left" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='none'"><i class="ti ti-file-type-pdf"></i> PDF (.pdf)</button>
+          </div>
+        </div>
+      </div>
+      <div id="history-list"></div>
+    </div>
+
+    <!-- SETTINGS TAB (admin only) -->
+    <div id="tab-settings" style="display:none">
+      <div class="card">
+        <div class="sec-title">Tenants / clients</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Manage tenants available in the handover form.</p>
+        <div id="tenant-tags" style="margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px">
+          <input class="setting-input" type="text" id="new-tenant" placeholder="New tenant name...">
+          <button class="btn btn-primary" onclick="addTenant()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-title">Analyst roster</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Manage the default analyst list.</p>
+        <div id="analyst-tags" style="margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px">
+          <input class="setting-input" type="text" id="new-analyst" placeholder="New analyst name...">
+          <button class="btn btn-primary" onclick="addAnalyst()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-title">User accounts</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Manage analyst login credentials.</p>
+        <div id="user-account-list" style="margin-bottom:14px"></div>
+        <button class="btn btn-primary" onclick="openAddUserModal()"><i class="ti ti-plus"></i> Add analyst account</button>
+      </div>
+      <div class="card">
+        <div class="sec-title">Admin password</div>
+        <div class="change-pw-form">
+          <div class="field"><label>New password</label><input type="password" id="new-admin-pw" placeholder="Enter new password"></div>
+          <div class="field"><label>Confirm password</label><input type="password" id="confirm-admin-pw" placeholder="Confirm new password"></div>
+          <div><button class="btn btn-primary" onclick="changeAdminPassword()"><i class="ti ti-key"></i> Update password</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="danger-title">Danger zone</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Permanently delete all handover history. Cannot be undone.</p>
+        <button class="btn btn-danger" onclick="clearAll()"><i class="ti ti-trash"></i> Clear all handover history</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Modal: Add analyst to roster -->
+<div class="modal-bg" id="modal-add-analyst">
+  <div class="modal">
+    <h3>Add analyst to roster</h3>
+    <div class="modal-field"><label>Analyst name</label><input type="text" id="m-analyst-name" placeholder="Name"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-add-analyst')">Cancel</button>
+      <button class="btn btn-primary" onclick="addAnalystFromModal()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add user account -->
+<div class="modal-bg" id="modal-add-user">
+  <div class="modal">
+    <h3>Add analyst account</h3>
+    <div class="modal-field"><label>Username</label><input type="text" id="m-user-username" placeholder="e.g. alen"></div>
+    <div class="modal-field"><label>Display name</label><input type="text" id="m-user-display" placeholder="e.g. Alen"></div>
+    <div class="modal-field"><label>Password</label><input type="password" id="m-user-password" placeholder="Set a password"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-add-user')">Cancel</button>
+      <button class="btn btn-primary" onclick="addUserAccount()">Add account</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════
+   FIREBASE REALTIME DATABASE STORAGE
+   All data lives at /soc in your Firebase project.
+   Hardcoded — no setup needed for any team member.
+════════════════════════════════════════════ */
+const LS_KEY_SESSION  = 'soc_jb_session';
+const FB_URL = 'https://soc-handover-default-rtdb.firebaseio.com/soc.json';
+
+async function jbGet() {
+  const r = await fetch(FB_URL, { cache: 'no-store' });
+  if (!r.ok) throw new Error('Firebase read failed: ' + r.status);
+  const data = await r.json();
+  if (!data) throw new Error('No data in Firebase yet');
+  return data;
+}
+
+async function jbSet(data) {
+  const r = await fetch(FB_URL, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error('Firebase write failed: ' + r.status);
+}
+
+/* ════════════════════════════════════════════
+   SIMPLE HASH (SHA-256)
+════════════════════════════════════════════ */
+async function hashPw(pw) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('soc2024:' + pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+/* ════════════════════════════════════════════
+   CONSTANTS
+════════════════════════════════════════════ */
+const STATUSES     = ['Open','In Progress','Resolved','Escalated','False Positive'];
+const SHIFTS_OPTS  = ['Shift 1','Shift 2','Shift 3','N/A'];
+const DEF_ANALYSTS = ['Alen','Ajin','Ansil','Krishna','Nikitha','Alina','Aleena','Adil'];
+const DEF_TENANTS  = ['Invictus','Other'];
+
+/* In-memory state (mirrored from bin) */
+let DB = { records:[], settings:{ analysts:[...DEF_ANALYSTS], tenants:[...DEF_TENANTS] }, auth:{ admin:'', users:{} } };
+let currentUser  = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY_SESSION)); } catch(e){ return null; } })();
+let selShiftVal  = 'Shift 1 — 7:00 AM–4:00 PM';
+let rosterAnalysts = [];
+let openGroups   = new Set();
+
+/* ════════════════════════════════════════════
+   LOADING
+════════════════════════════════════════════ */
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg||'Loading…';
+  document.getElementById('loading-overlay').classList.add('show');
+}
+function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
+
+/* ════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════ */
+async function init() {
+  // Firebase is hardcoded — no setup screen needed
+  document.getElementById('setup-screen').style.display = 'none';
+  showLoading('Connecting to database…');
+  try {
+    const data = await jbGet();
+    DB = data;
+    hideLoading();
+    if (currentUser) { enterApp(); return; }
+    document.getElementById('login-screen').style.display = 'flex';
+  } catch(e) {
+    // First time — initialise the database
+    hideLoading();
+    showLoading('Setting up database for first time…');
+    try {
+      const adminHash = await hashPw('admin123');
+      const defaultUsers = {};
+      for (const name of DEF_ANALYSTS) {
+        const u = name.toLowerCase();
+        defaultUsers[u] = { displayName: name, hash: await hashPw(u) };
+      }
+      DB = {
+        records: [],
+        settings: { analysts: [...DEF_ANALYSTS], tenants: [...DEF_TENANTS] },
+        auth: { admin: adminHash, users: defaultUsers }
+      };
+      await jbSet(DB);
+      hideLoading();
+      document.getElementById('login-screen').style.display = 'flex';
+    } catch(e2) {
+      hideLoading();
+      alert('Could not connect to Firebase: ' + e2.message + '\n\nMake sure your Firebase database is in Test Mode.');
+      console.error(e2);
+    }
+  }
+}
+
+init();
+
+/* ════════════════════════════════════════════
+   SETUP — no longer used with Firebase
+════════════════════════════════════════════ */
+async function doSetup() {}
+
+/* ════════════════════════════════════════════
+   LOGIN / LOGOUT
+════════════════════════════════════════════ */
+document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim().toLowerCase();
+  const password = document.getElementById('login-pass').value;
+  const errEl    = document.getElementById('login-error');
+  errEl.classList.remove('show');
+  if (!username||!password) { errEl.classList.add('show'); return; }
+
+  showLoading('Signing in…');
+  try {
+    // Fetch latest (so passwords changed on another device work)
+    DB = await jbGet();
+    const inputHash = await hashPw(password);
+
+    if (username === 'admin' && DB.auth.admin === inputHash) {
+      currentUser = { username:'admin', displayName:'Admin', role:'admin' };
+      localStorage.setItem(LS_KEY_SESSION, JSON.stringify(currentUser));
+      hideLoading(); enterApp(); return;
+    }
+    const u = DB.auth.users[username];
+    if (u && u.hash === inputHash) {
+      currentUser = { username, displayName: u.displayName, role:'analyst' };
+      localStorage.setItem(LS_KEY_SESSION, JSON.stringify(currentUser));
+      hideLoading(); enterApp(); return;
+    }
+    hideLoading();
+    errEl.classList.add('show');
+  } catch(e) {
+    hideLoading();
+    errEl.textContent = 'Connection error. Try again.';
+    errEl.classList.add('show');
+  }
+}
+
+function enterApp() {
+  const isAdmin = currentUser.role === 'admin';
+  document.querySelectorAll('.admin-only').forEach(el => el.style.display = isAdmin ? 'block' : 'none');
+
+  const initials = currentUser.displayName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('user-avatar').textContent = initials;
+  document.getElementById('user-display-name').textContent = currentUser.displayName;
+  const rb = document.getElementById('user-role-badge');
+  rb.textContent = currentUser.role;
+  rb.className = 'user-role ' + (isAdmin ? 'role-admin' : 'role-analyst');
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display   = 'block';
+
+  rosterAnalysts = [...(DB.settings.analysts||DEF_ANALYSTS)];
+  buildTeamSelect();
+  buildRoster();
+  updateHistCount();
+  if (isAdmin) renderSettings();
+  setDefaultDateTime();
+  addAlertRow();
+  switchTab('form');
+  startPolling();
+}
+
+/* Auto-poll: refresh history every 30s so all users see new records live */
+let pollTimer = null;
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(async () => {
+    try {
+      const latest = await jbGet();
+      DB.records  = latest.records  || DB.records;
+      DB.settings = latest.settings || DB.settings;
+      DB.auth     = latest.auth     || DB.auth;
+      updateHistCount();
+      // Only re-render history if the tab is currently visible
+      const histTab = document.getElementById('tab-history');
+      if (histTab && histTab.style.display !== 'none') renderHistory();
+    } catch(e) {}
+  }, 30000); // every 30 seconds
+}
+function stopPolling() { if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
+
+function doLogout() {
+  stopPolling();
+  currentUser = null;
+  localStorage.removeItem(LS_KEY_SESSION);
+  document.getElementById('app-screen').style.display   = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-error').classList.remove('show');
+}
+
+/* ════════════════════════════════════════════
+   SAVE TO BIN
+════════════════════════════════════════════ */
+async function saveDB(msg) {
+  showLoading(msg||'Saving…');
+  try { await jbSet(DB); } catch(e) { toast('Save failed: '+e.message); }
+  hideLoading();
+}
+
+/* ════════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════════ */
+function setDefaultDateTime() {
+  document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+  const now = new Date();
+  document.getElementById('f-time').value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+}
+function fmtDate(d) { return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
+
+/* ════════════════════════════════════════════
+   TABS
+════════════════════════════════════════════ */
+function switchTab(t) {
+  ['form','history','settings'].forEach(id => document.getElementById('tab-'+id).style.display = id===t?'block':'none');
+  document.querySelectorAll('.tab').forEach(el => {
+    const m = el.getAttribute('onclick')?.match(/'(\w+)'/);
+    if(m) el.classList.toggle('active', m[1]===t);
+  });
+  if(t==='history')  renderHistory();
+  if(t==='settings') renderSettings();
+}
+
+/* ════════════════════════════════════════════
+   TEAM SELECT
+════════════════════════════════════════════ */
+function buildTeamSelect() {
+  const sel = document.getElementById('f-team');
+  const cur = sel.value;
+  sel.innerHTML = (DB.settings.tenants||DEF_TENANTS).map(t=>`<option value="${t}">${t}</option>`).join('');
+  if(cur && (DB.settings.tenants||[]).includes(cur)) sel.value=cur;
+}
+
+/* ════════════════════════════════════════════
+   ROSTER
+════════════════════════════════════════════ */
+function buildRoster() {
+  const tb = document.getElementById('roster-body');
+  tb.innerHTML='';
+  rosterAnalysts.forEach(a => {
+    const sid='rs-'+a.replace(/\s/g,'_'), did='rd-'+a.replace(/\s/g,'_');
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${a}</td><td><select id="${sid}">${SHIFTS_OPTS.map(s=>`<option>${s}</option>`).join('')}</select></td><td><select id="${did}"><option>Yes</option><option>No</option></select></td><td><button class="btn btn-sm btn-danger" onclick="removeRosterRow(this,'${a}')" title="Remove"><i class="ti ti-x"></i></button></td>`;
+    tb.appendChild(tr);
+  });
+}
+function removeRosterRow(btn,name) { rosterAnalysts=rosterAnalysts.filter(a=>a!==name); btn.closest('tr').remove(); }
+function openAddAnalystModal() { document.getElementById('m-analyst-name').value=''; document.getElementById('modal-add-analyst').classList.add('open'); setTimeout(()=>document.getElementById('m-analyst-name').focus(),80); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function addAnalystFromModal() {
+  const name=document.getElementById('m-analyst-name').value.trim();
+  if(!name)return; if(rosterAnalysts.includes(name)){toast('Already in roster');return;}
+  rosterAnalysts.push(name); closeModal('modal-add-analyst'); buildRoster();
+}
+
+/* ════════════════════════════════════════════
+   ALERT ROWS
+════════════════════════════════════════════ */
+function addAlertRow() {
+  const tb=document.getElementById('alert-rows'),tr=document.createElement('tr');
+  tr.innerHTML=`<td><input type="text" placeholder="ALT-0001"></td><td><input type="text" placeholder="Brute force"></td><td><input type="text" placeholder="user@domain"></td><td><select>${STATUSES.map(s=>`<option>${s}</option>`).join('')}</select></td><td><select><option value="">—</option>${(DB.settings.analysts||DEF_ANALYSTS).map(a=>`<option>${a}</option>`).join('')}</select></td><td><input type="text" placeholder="Notes..."></td><td><button class="btn btn-sm btn-danger" onclick="this.closest('tr').remove()"><i class="ti ti-trash"></i></button></td>`;
+  tb.appendChild(tr);
+}
+
+/* ════════════════════════════════════════════
+   SHIFT PICKER
+════════════════════════════════════════════ */
+function selShift(btn,val) { document.querySelectorAll('.shift-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); selShiftVal=val; }
+
+/* ════════════════════════════════════════════
+   COLLECT FORM
+════════════════════════════════════════════ */
+function getAlerts() {
+  return Array.from(document.querySelectorAll('#alert-rows tr')).map(r=>{
+    const inp=r.querySelectorAll('input,select');
+    return {id:inp[0].value,type:inp[1].value,entity:inp[2].value,status:inp[3].value,assignee:inp[4].value,comments:inp[5].value};
+  }).filter(a=>a.id||a.type);
+}
+function getRoster() {
+  return rosterAnalysts.map(a=>({ name:a, shift:document.getElementById('rs-'+a.replace(/\s/g,'_'))?.value||'', onDuty:document.getElementById('rd-'+a.replace(/\s/g,'_'))?.value||'No' }));
+}
+
+/* ════════════════════════════════════════════
+   SUBMIT
+════════════════════════════════════════════ */
+async function submitHandover() {
+  const date=document.getElementById('f-date').value;
+  const outgoing=document.getElementById('f-outgoing').value.trim();
+  const incoming=document.getElementById('f-incoming').value.trim();
+  if(!date){toast('Please select a date');return;}
+  if(!outgoing||!incoming){toast('Please fill in both analyst names');return;}
+  const rec={
+    id:Date.now(), date, team:document.getElementById('f-team').value, shift:selShiftVal,
+    severity:{ critical:+document.getElementById('s-critical').value||0, major:+document.getElementById('s-major').value||0, minor:+document.getElementById('s-minor').value||0, system:+document.getElementById('s-system').value||0 },
+    alerts:getAlerts(), notes:document.getElementById('f-notes').value, roster:getRoster(),
+    outgoing, incoming, handoverTime:document.getElementById('f-time').value,
+    submittedAt:new Date().toISOString(), submittedBy:currentUser.displayName
+  };
+  showLoading('Saving…');
+  try {
+    // Always fetch latest before writing to avoid overwriting others' records
+    const latest = await jbGet();
+    DB.records = latest.records || [];
+    DB.settings = latest.settings || DB.settings;
+    DB.auth = latest.auth || DB.auth;
+  } catch(e){}
+  DB.records.unshift(rec);
+  await saveDB('Saving handover…');
+  updateHistCount(); resetForm(); toast('Handover saved'); switchTab('history');
+}
+
+/* ════════════════════════════════════════════
+   RESET FORM
+════════════════════════════════════════════ */
+function resetForm() {
+  setDefaultDateTime();
+  if((DB.settings.tenants||[]).length) document.getElementById('f-team').value=DB.settings.tenants[0];
+  ['s-critical','s-major','s-minor','s-system'].forEach(id=>document.getElementById(id).value=0);
+  document.getElementById('alert-rows').innerHTML='';
+  document.getElementById('f-notes').value='';
+  document.getElementById('f-outgoing').value='';
+  document.getElementById('f-incoming').value='';
+  document.querySelectorAll('.shift-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+  selShiftVal='Shift 1 — 7:00 AM–4:00 PM';
+  rosterAnalysts=[...(DB.settings.analysts||DEF_ANALYSTS)];
+  buildRoster(); addAlertRow();
+}
+
+/* ════════════════════════════════════════════
+   HISTORY
+════════════════════════════════════════════ */
+function updateHistCount() { document.getElementById('hist-count').textContent=(DB.records||[]).length; }
+function clearFilters() { document.getElementById('fl-search').value=''; document.getElementById('fl-shift').value=''; document.getElementById('fl-date').value=''; renderHistory(); }
+function recordMatches(r,ftShift,ftDate,ftSearch) {
+  if(ftShift&&r.shift!==ftShift)return false;
+  if(ftDate&&r.date!==ftDate)return false;
+  if(ftSearch){ const q=ftSearch.toLowerCase(),hay=[r.outgoing,r.incoming,r.date,r.shift,r.notes,r.submittedBy,...(r.alerts||[]).flatMap(a=>[a.id,a.type,a.entity,a.assignee,a.comments])].join(' ').toLowerCase(); if(!hay.includes(q))return false; }
+  return true;
+}
+
+async function renderHistory() {
+  const el=document.getElementById('history-list');
+  el.innerHTML=`<div class="empty"><div class="spinner" style="margin:0 auto 8px"></div>Loading…</div>`;
+  try { DB=await jbGet(); updateHistCount(); } catch(e){}
+  const ftShift=document.getElementById('fl-shift').value, ftDate=document.getElementById('fl-date').value, ftSearch=document.getElementById('fl-search').value.trim();
+  const groups={};
+  (DB.records||[]).forEach(r=>{ if(!groups[r.team])groups[r.team]=[]; if(recordMatches(r,ftShift,ftDate,ftSearch))groups[r.team].push(r); });
+  const tenantOrder=[...new Set([...(DB.settings.tenants||DEF_TENANTS),...Object.keys(groups)])];
+  const active=tenantOrder.filter(t=>groups[t]&&groups[t].length>0);
+  if(!(DB.records||[]).length){ el.innerHTML=`<div class="empty"><i class="ti ti-inbox"></i>No handovers yet.</div>`; return; }
+  if(!active.length){ el.innerHTML=`<div class="empty"><i class="ti ti-search"></i>No records match your filters.</div>`; return; }
+  const isAdmin=currentUser&&currentUser.role==='admin';
+  el.innerHTML=active.map(tenant=>{
+    const recs=groups[tenant],isOpen=openGroups.has(tenant);
+    const totAlerts=recs.reduce((s,r)=>s+r.severity.critical+r.severity.major+r.severity.minor+r.severity.system,0);
+    const critCount=recs.reduce((s,r)=>s+r.severity.critical,0);
+    const recordsHtml=recs.map(r=>{
+      const ridx=(DB.records||[]).indexOf(r),tot=r.severity.critical+r.severity.major+r.severity.minor+r.severity.system,did='hd-'+ridx;
+      const byHtml=r.submittedBy?`<span style="font-size:11px;color:var(--text-secondary)">by ${r.submittedBy}</span>`:'';
+      const delBtn=isAdmin?`<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();delRecord(${ridx})" title="Delete"><i class="ti ti-trash"></i></button>`:'';
+      return `<div class="hist-item" onclick="toggleDetail('${did}')"><div class="hist-header"><div><span style="font-weight:500;font-size:13px">${fmtDate(r.date)}</span><span style="color:var(--text-secondary);font-size:12px;margin-left:8px">${r.shift.split(' — ')[0]}</span> ${byHtml}</div>${delBtn}</div><div class="hist-meta">${r.severity.critical>0?`<span class="badge b-crit">${r.severity.critical} critical</span>`:''} ${r.severity.major>0?`<span class="badge b-major">${r.severity.major} major</span>`:''}<span style="font-size:12px;color:var(--text-secondary)">${tot} total alerts</span><span style="font-size:12px;color:var(--text-secondary)">${r.outgoing} → ${r.incoming}</span></div><div class="hist-detail" id="${did}"><div class="detail-grid"><div class="di"><span>Outgoing</span>${r.outgoing}</div><div class="di"><span>Incoming</span>${r.incoming}</div><div class="di"><span>Handover time</span>${r.handoverTime||'—'}</div><div class="di"><span>Shift</span>${r.shift}</div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px"><div class="sev-mini" style="background:#FCEBEB;border-color:#F09595"><div class="sev-mini-label" style="color:#A32D2D">Critical</div><div class="sev-mini-val" style="color:#A32D2D">${r.severity.critical}</div></div><div class="sev-mini" style="background:#FAEEDA;border-color:#FAC775"><div class="sev-mini-label" style="color:#854F0B">Major</div><div class="sev-mini-val" style="color:#854F0B">${r.severity.major}</div></div><div class="sev-mini" style="background:#E6F1FB;border-color:#85B7EB"><div class="sev-mini-label" style="color:#185FA5">Minor</div><div class="sev-mini-val" style="color:#185FA5">${r.severity.minor}</div></div><div class="sev-mini" style="background:#EAF3DE;border-color:#97C459"><div class="sev-mini-label" style="color:#3B6D11">System</div><div class="sev-mini-val" style="color:#3B6D11">${r.severity.system}</div></div></div>${r.notes?`<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">Notes</div><div style="font-size:13px;white-space:pre-wrap;line-height:1.6">${r.notes}</div></div>`:''}${r.alerts&&r.alerts.length?`<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">${r.alerts.length} alert(s)</div><div style="overflow-x:auto;margin-bottom:12px"><table class="atbl"><thead><tr><th>ID</th><th>Type</th><th>Entity</th><th>Status</th><th>Assignee</th><th>Comments</th></tr></thead><tbody>${r.alerts.map(a=>`<tr><td>${a.id}</td><td>${a.type}</td><td>${a.entity}</td><td>${a.status}</td><td>${a.assignee}</td><td>${a.comments}</td></tr>`).join('')}</tbody></table></div>`:''} ${r.roster&&r.roster.filter(a=>a.onDuty==='Yes').length?`<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">On-duty analysts</div><div style="display:flex;flex-wrap:wrap;gap:6px">${r.roster.filter(a=>a.onDuty==='Yes').map(a=>`<span class="duty-pill">${a.name} · ${a.shift}</span>`).join('')}</div>`:''}</div></div>`;
+    }).join('');
+    return `<div class="tenant-group"><div class="tenant-group-header" onclick="toggleGroup('${tenant}')"><div class="tenant-group-title"><i class="ti ti-building" style="font-size:16px;color:var(--text-secondary)"></i><span class="tenant-name">${tenant}</span><span class="tenant-count">${recs.length} handover${recs.length!==1?'s':''}</span>${critCount>0?`<span class="badge b-crit">${critCount} critical</span>`:''}<span style="font-size:12px;color:var(--text-secondary)">${totAlerts} total alerts</span></div><i class="ti ti-chevron-down tenant-chevron${isOpen?' open':''}" id="chev-${tenant}"></i></div><div class="tenant-records${isOpen?' open':''}" id="grp-${tenant}">${recordsHtml}</div></div>`;
+  }).join('');
+}
+
+function toggleGroup(t) { if(openGroups.has(t))openGroups.delete(t); else openGroups.add(t); document.getElementById('grp-'+t)?.classList.toggle('open',openGroups.has(t)); document.getElementById('chev-'+t)?.classList.toggle('open',openGroups.has(t)); }
+function toggleDetail(id) { const d=document.getElementById(id); if(d)d.style.display=d.style.display==='block'?'none':'block'; }
+
+async function delRecord(idx) {
+  if(!confirm('Delete this handover record?'))return;
+  DB.records.splice(idx,1);
+  await saveDB('Deleting…');
+  updateHistCount(); renderHistory();
+}
+async function clearAll() {
+  if(!confirm('Delete ALL handover history? Cannot be undone.'))return;
+  DB.records=[];
+  await saveDB('Clearing…');
+  updateHistCount(); renderHistory(); toast('All history cleared');
+}
+
+/* ════════════════════════════════════════════
+   SETTINGS
+════════════════════════════════════════════ */
+function renderSettings() {
+  document.getElementById('analyst-tags').innerHTML=(DB.settings.analysts||[]).map(a=>`<span class="analyst-tag">${a}<button onclick="removeAnalyst('${a}')">×</button></span>`).join('');
+  document.getElementById('tenant-tags').innerHTML=(DB.settings.tenants||[]).map(t=>`<span class="tenant-tag">${t}<button onclick="removeTenant('${t}')">×</button></span>`).join('');
+  renderUserAccounts();
+}
+
+function renderUserAccounts() {
+  const c=document.getElementById('user-account-list'); if(!c)return;
+  const u=DB.auth.users||{};
+  const entries=Object.entries(u);
+  if(!entries.length){c.innerHTML=`<p style="font-size:13px;color:var(--text-secondary)">No analyst accounts yet.</p>`;return;}
+  c.innerHTML=entries.map(([un,d])=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px"><span style="flex:1"><strong>${d.displayName}</strong> <span style="color:var(--text-secondary);font-size:12px">@${un}</span></span><button class="btn btn-sm btn-danger" onclick="removeUserAccount('${un}')"><i class="ti ti-trash"></i></button></div>`).join('');
+}
+
+async function addAnalyst() {
+  const inp=document.getElementById('new-analyst'),name=inp.value.trim();
+  if(!name)return; if((DB.settings.analysts||[]).includes(name)){toast('Already exists');return;}
+  DB.settings.analysts.push(name); await saveDB('Saving…'); inp.value=''; renderSettings(); toast(name+' added');
+}
+async function removeAnalyst(name) {
+  if((DB.settings.analysts||[]).length<=1){toast('Keep at least one analyst');return;}
+  DB.settings.analysts=DB.settings.analysts.filter(a=>a!==name); await saveDB('Saving…'); renderSettings();
+}
+async function addTenant() {
+  const inp=document.getElementById('new-tenant'),name=inp.value.trim();
+  if(!name)return; if((DB.settings.tenants||[]).includes(name)){toast('Already exists');return;}
+  DB.settings.tenants.push(name); await saveDB('Saving…'); inp.value=''; buildTeamSelect(); renderSettings(); toast(name+' added');
+}
+async function removeTenant(name) {
+  if((DB.settings.tenants||[]).length<=1){toast('Keep at least one tenant');return;}
+  DB.settings.tenants=DB.settings.tenants.filter(t=>t!==name); await saveDB('Saving…'); buildTeamSelect(); renderSettings();
+}
+
+function openAddUserModal() { document.getElementById('m-user-username').value=''; document.getElementById('m-user-display').value=''; document.getElementById('m-user-password').value=''; document.getElementById('modal-add-user').classList.add('open'); setTimeout(()=>document.getElementById('m-user-username').focus(),80); }
+
+async function addUserAccount() {
+  const username=document.getElementById('m-user-username').value.trim().toLowerCase();
+  const display=document.getElementById('m-user-display').value.trim();
+  const password=document.getElementById('m-user-password').value;
+  if(!username||!display||!password){toast('Fill in all fields');return;}
+  if(username==='admin'){toast('"admin" is reserved');return;}
+  if(!DB.auth.users)DB.auth.users={};
+  if(DB.auth.users[username]){toast('Username already exists');return;}
+  DB.auth.users[username]={displayName:display,hash:await hashPw(password)};
+  await saveDB('Creating account…'); closeModal('modal-add-user'); renderUserAccounts(); toast('@'+username+' created');
+}
+
+async function removeUserAccount(username) {
+  if(!confirm('Remove account @'+username+'?'))return;
+  delete DB.auth.users[username]; await saveDB('Removing…'); renderUserAccounts(); toast('@'+username+' removed');
+}
+
+async function changeAdminPassword() {
+  const np=document.getElementById('new-admin-pw').value,cp=document.getElementById('confirm-admin-pw').value;
+  if(!np){toast('Enter a new password');return;}
+  if(np!==cp){toast('Passwords do not match');return;}
+  if(np.length<6){toast('Min 6 characters');return;}
+  showLoading('Updating password…');
+  try {
+    // Fetch latest DB first so we don't overwrite other settings
+    const latest = await jbGet();
+    DB.records = latest.records || DB.records;
+    DB.settings = latest.settings || DB.settings;
+    DB.auth = latest.auth || DB.auth;
+    DB.auth.admin = await hashPw(np);
+    await jbSet(DB);
+    hideLoading();
+    document.getElementById('new-admin-pw').value='';
+    document.getElementById('confirm-admin-pw').value='';
+    toast('✓ Admin password updated — use new password next login');
+  } catch(e) {
+    hideLoading();
+    toast('Failed to save: ' + e.message);
+  }
+}
+
+/* ════════════════════════════════════════════
+   DOWNLOAD: EXCEL & PDF
+════════════════════════════════════════════ */
+function toggleDlMenu() {
+  const m=document.getElementById('dl-menu');
+  m.style.display=m.style.display==='block'?'none':'block';
+}
+document.addEventListener('click', e=>{ if(!document.getElementById('dl-menu-wrap')?.contains(e.target)) document.getElementById('dl-menu').style.display='none'; });
+
+function getFilteredRecords() {
+  const q=(document.getElementById('fl-search')?.value||'').toLowerCase();
+  const sh=document.getElementById('fl-shift')?.value||'';
+  const dt=document.getElementById('fl-date')?.value||'';
+  return (DB.records||[]).filter(r=>{
+    if(sh&&r.shift!==sh)return false;
+    if(dt&&r.date!==dt)return false;
+    if(q){const s=JSON.stringify(r).toLowerCase();if(!s.includes(q))return false;}
+    return true;
+  });
+}
+
+function downloadExcel() {
+  document.getElementById('dl-menu').style.display='none';
+  const recs=getFilteredRecords();
+  if(!recs.length){toast('No records to export');return;}
+  // Main sheet: one row per handover
+  const mainRows=recs.map(r=>({
+    'Date':r.date||'',
+    'Shift':r.shift||'',
+    'Tenant':r.tenant||'',
+    'Critical':r.severity?.critical??0,
+    'Major':r.severity?.major??0,
+    'Minor':r.severity?.minor??0,
+    'System':r.severity?.system??0,
+    'Notes':r.notes||'',
+    'Outgoing Analyst':r.outgoing||'',
+    'Incoming Analyst':r.incoming||'',
+    'Handover Time':r.time||'',
+    'Submitted By':r.submittedBy||'',
+    'Submitted At':r.submittedAt?new Date(r.submittedAt).toLocaleString():''
+  }));
+  // Alerts sheet: one row per alert
+  const alertRows=[];
+  recs.forEach(r=>{
+    (r.alerts||[]).forEach(a=>{
+      alertRows.push({'Date':r.date,'Tenant':r.tenant,'Alert ID':a.id||'','Type':a.type||'','Entity/User':a.entity||'','Status':a.status||'','Assignee':a.assignee||'','Comments':a.comments||''});
+    });
+  });
+  // Roster sheet
+  const rosterRows=[];
+  recs.forEach(r=>{
+    (r.roster||[]).forEach(row=>{
+      rosterRows.push({'Date':r.date,'Tenant':r.tenant,'Analyst':row.name||'','Shift':row.shift||'','On Duty':row.onDuty?'Yes':'No'});
+    });
+  });
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(mainRows),'Handovers');
+  if(alertRows.length)XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(alertRows),'Alerts');
+  if(rosterRows.length)XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rosterRows),'Roster');
+  XLSX.writeFile(wb,`SOC_Handover_History_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Excel downloaded');
+}
+
+function downloadPDF() {
+  document.getElementById('dl-menu').style.display='none';
+  const recs=getFilteredRecords();
+  if(!recs.length){toast('No records to export');return;}
+  const win=window.open('','_blank');
+  const rows=recs.map(r=>`
+    <div class="record">
+      <div class="rec-header">
+        <span>${r.date||'—'}</span>
+        <span>${r.shift||'—'}</span>
+        <span class="tenant">${r.tenant||'—'}</span>
+        ${(r.severity?.critical>0)?`<span class="badge crit">${r.severity.critical} critical</span>`:''}
+      </div>
+      <table>
+        <tr><td class="lbl">Outgoing</td><td>${r.outgoing||'—'}</td><td class="lbl">Incoming</td><td>${r.incoming||'—'}</td><td class="lbl">Time</td><td>${r.time||'—'}</td></tr>
+        <tr><td class="lbl">Alerts</td><td colspan="5">Critical: ${r.severity?.critical??0} &nbsp; Major: ${r.severity?.major??0} &nbsp; Minor: ${r.severity?.minor??0} &nbsp; System: ${r.severity?.system??0}</td></tr>
+        ${r.notes?`<tr><td class="lbl">Notes</td><td colspan="5">${r.notes.replace(/</g,'&lt;')}</td></tr>`:''}
+      </table>
+      ${(r.alerts||[]).length?`<table class="atbl"><thead><tr><th>Alert ID</th><th>Type</th><th>Entity</th><th>Status</th><th>Assignee</th><th>Comments</th></tr></thead><tbody>${r.alerts.map(a=>`<tr><td>${a.id||''}</td><td>${a.type||''}</td><td>${a.entity||''}</td><td>${a.status||''}</td><td>${a.assignee||''}</td><td>${a.comments||''}</td></tr>`).join('')}</tbody></table>`:''}
+    </div>`).join('');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>SOC Handover History</title><style>
+    body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:2cm}
+    h1{font-size:16px;margin-bottom:4px}
+    .sub{color:#666;font-size:11px;margin-bottom:20px}
+    .record{border:1px solid #ddd;border-radius:6px;margin-bottom:14px;overflow:hidden;page-break-inside:avoid}
+    .rec-header{background:#f5f5f3;padding:8px 12px;display:flex;gap:12px;align-items:center;font-weight:600;font-size:12px}
+    .tenant{flex:1}
+    .badge{font-size:10px;padding:2px 8px;border-radius:20px;background:#FCEBEB;color:#A32D2D}
+    table{width:100%;border-collapse:collapse;padding:8px 12px;display:table}
+    td{padding:4px 12px;vertical-align:top;font-size:11px}
+    .lbl{color:#666;font-weight:600;white-space:nowrap;width:80px}
+    .atbl{width:calc(100% - 24px);margin:0 12px 10px;border-collapse:collapse}
+    .atbl th{text-align:left;padding:4px 6px;font-size:10px;color:#666;border-bottom:1px solid #eee}
+    .atbl td{padding:3px 6px;font-size:10px;border-bottom:1px solid #f0f0f0}
+    @media print{body{margin:1cm}.record{page-break-inside:avoid}}
+  </style></head><body>
+    <h1>SOC Shift Handover History</h1>
+    <div class="sub">Exported ${new Date().toLocaleString()} &nbsp;·&nbsp; ${recs.length} record${recs.length!==1?'s':''}</div>
+    ${rows}
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  win.document.close();
+  toast('PDF print dialog opened');
+}
+
+/* ════════════════════════════════════════════
+   TOAST & KEYBOARD
+════════════════════════════════════════════ */
+function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+document.getElementById('new-analyst').addEventListener('keydown', e=>{if(e.key==='Enter')addAnalyst();});
+document.getElementById('new-tenant').addEventListener('keydown',  e=>{if(e.key==='Enter')addTenant();});
+document.getElementById('m-analyst-name').addEventListener('keydown', e=>{if(e.key==='Enter')addAnalystFromModal();});
+document.getElementById('m-user-password').addEventListener('keydown', e=>{if(e.key==='Enter')addUserAccount();});
+document.getElementById('modal-add-analyst').addEventListener('click', e=>{if(e.target===e.currentTarget)closeModal('modal-add-analyst');});
+document.getElementById('modal-add-user').addEventListener('click', e=>{if(e.target===e.currentTarget)closeModal('modal-add-user');});
+</script>
+</body>
+</html>
